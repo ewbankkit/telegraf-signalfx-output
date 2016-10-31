@@ -1,21 +1,27 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"errors"
 
 	"log"
 
+	"github.com/influxdata/toml"
 	"github.com/signalfx/golib/sfxclient"
 )
 
 type SignalFx struct {
-	AuthToken string `toml:"auth_token"`
-	UserAgent string `toml:"user_agent"`
-	Endpoint  string `toml:"endpoint"`
+	Config struct {
+		AuthToken string `toml:"auth_token"`
+		UserAgent string `toml:"user_agent"`
+		Endpoint  string `toml:"endpoint"`
+	} `toml:"signalfx"`
 
 	sink *sfxclient.HTTPDatapointSink
 }
@@ -43,10 +49,41 @@ func usageExit(rc int) {
 	os.Exit(rc)
 }
 
-func loadConfig(path string) error {
+func (s *SignalFx) loadConfig(path string) error {
 	if path == "" {
 		return errors.New("No configuration file specified")
 	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	buf, err := ioutil.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	if err := toml.Unmarshal(buf, s); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *SignalFx) connect() error {
+	s.sink = sfxclient.NewHTTPDatapointSink()
+	s.sink.AuthToken = s.Config.AuthToken
+	if len(s.Config.UserAgent) > 0 {
+		s.sink.UserAgent = s.Config.UserAgent
+	}
+	if len(s.Config.Endpoint) > 0 {
+		s.sink.Endpoint = s.Config.Endpoint
+	}
+
+	return nil
+}
+
+func (s *SignalFx) close() error {
 	return nil
 }
 
@@ -64,8 +101,40 @@ func main() {
 		}
 	}
 
-	err := loadConfig(*fConfig)
+	var s SignalFx
+	err := s.loadConfig(*fConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
+	err = s.connect()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer s.close()
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		var m Metric
+		err = m.unmarshal(scanner.Text())
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+// https://github.com/influxdata/telegraf/blob/master/plugins/serializers/json/json.go
+// https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_OUTPUT.md#json
+type Metric struct {
+	Fields    map[string]interface{}
+	Tags      map[string]string
+	Name      string
+	Timestamp int64
+}
+
+func (m *Metric) unmarshal(line string) error {
+	err := json.Unmarshal([]byte(line), m)
+	if err != nil {
+		return err
+	}
+	return nil
 }
