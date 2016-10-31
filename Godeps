@@ -1,4 +1,7 @@
-github.com/influxdata/toml af4df43894b16e3fd2b788d01bd27ad0776ef2d0
+github.com/golang/protobuf 552c7b9542c194800fd493123b3798ef0a832032
 github.com/signalfx/com_signalfx_metrics_protobuf 1477d7f5730360be99fcaf7e7d7c56e03be2eabc
 github.com/signalfx/gohistogram 1ccfd2ff508314074672f4450a917011a2060408
 github.com/signalfx/golib 93fae626851610c921ba9dfef122b6216d013903
+golang.org/x/net 6acef71eb69611914f7a30939ea9f6e194c78172
+gopkg.in/logfmt.v0 a0ff333161fe5c2daed0ba52d1792bd3d2531b94
+gopkg.in/stack.v1 100eb0c0a9c5b306ca2fb4f165df21d80ada4b82
