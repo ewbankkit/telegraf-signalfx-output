@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
+	"strings"
 
 	"golang.org/x/net/context"
 
@@ -17,7 +19,7 @@ import (
 	"github.com/signalfx/golib/sfxclient"
 )
 
-type SignalFx struct {
+type signalFx struct {
 	Config struct {
 		AuthToken string `toml:"auth_token"`
 		UserAgent string `toml:"user_agent"`
@@ -27,30 +29,40 @@ type SignalFx struct {
 	sink *sfxclient.HTTPDatapointSink
 }
 
-var invalidNameCharRE = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+var (
+	invalidNameCharRE = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+	envVarRE          = regexp.MustCompile(`\$\w+`)
+)
 
-func (s *SignalFx) loadConfig(path string) error {
+// Lifted from internal/config/config.go:parseFile.
+func (s *signalFx) loadConfig(path string) error {
 	if path == "" {
 		return errors.New("No configuration file specified")
 	}
 
-	f, err := os.Open(path)
+	contents, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	buf, err := ioutil.ReadAll(f)
-	if err != nil {
-		return err
+	// ugh windows why
+	contents = bytes.TrimPrefix(contents, []byte("\xef\xbb\xbf"))
+
+	envVars := envVarRE.FindAll(contents, -1)
+	for _, envVar := range envVars {
+		envVal := os.Getenv(strings.TrimPrefix(string(envVar), "$"))
+		if envVal != "" {
+			contents = bytes.Replace(contents, envVar, []byte(envVal), 1)
+		}
 	}
-	if err := toml.Unmarshal(buf, s); err != nil {
+
+	if err := toml.Unmarshal(contents, s); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *SignalFx) connect() error {
+func (s *signalFx) connect() error {
 	s.sink = sfxclient.NewHTTPDatapointSink()
 	s.sink.AuthToken = s.Config.AuthToken
 	if len(s.Config.UserAgent) > 0 {
@@ -63,11 +75,11 @@ func (s *SignalFx) connect() error {
 	return nil
 }
 
-func (s *SignalFx) close() error {
+func (s *signalFx) close() error {
 	return nil
 }
 
-func (s *SignalFx) write(metrics []*Metric) error {
+func (s *signalFx) write(metrics []*metric) error {
 	var datapoints []*datapoint.Datapoint
 	for _, metric := range metrics {
 		// Sanitize metric name.

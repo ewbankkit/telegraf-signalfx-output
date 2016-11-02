@@ -10,7 +10,7 @@ import (
 )
 
 // https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_OUTPUT.md#json
-type Metric struct {
+type metric struct {
 	Fields    map[string]interface{}
 	Tags      map[string]string
 	Name      string
@@ -40,7 +40,7 @@ func usageExit(rc int) {
 	os.Exit(rc)
 }
 
-func (m *Metric) unmarshal(line string) error {
+func (m *metric) unmarshal(line string) error {
 	err := json.Unmarshal([]byte(line), m)
 	if err != nil {
 		return err
@@ -63,7 +63,7 @@ func main() {
 		}
 	}
 
-	var s SignalFx
+	var s signalFx
 	err := s.loadConfig(*fConfig)
 	if err != nil {
 		log.Fatal(err)
@@ -74,10 +74,10 @@ func main() {
 	}
 	defer s.close()
 
-	var metrics []*Metric
+	var metrics []*metric
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-		var m Metric
+		var m metric
 		err = m.unmarshal(scanner.Text())
 		if err != nil {
 			log.Fatal(err)
